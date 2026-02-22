@@ -84,6 +84,15 @@ async def on_ready():
     await tree.sync()
     print("ULTRA PRO BOT READY")
 
+# ----------Custom Activity---------
+@bot.event
+async def on_ready():
+    custom_status = discord.Activity(
+        type=discord.ActivityType.playing,
+        name="with your feelings ❤️"
+    )
+    await bot.change_presence(status=discord.Status.idle, activity=custom_status)
+
 # ---------- SLASH COMMANDS ----------
 
 @tree.command(name="ping")
