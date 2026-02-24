@@ -1,154 +1,96 @@
 import discord
-from discord.ext import commands
-from discord import app_commands
+import json
+import asyncio
 from groq import Groq
-import json, os, time, requests
+from discord.ext import commands
 from dotenv import load_dotenv
-from flask import Flask
-from threading import Thread
-
-app = Flask('')
-
-@app.route('/')
-def home():
-    return "Bot Alive"
-
-def run():
-    app.run(host='0.0.0.0', port=8080)
-
-def keep_alive():
-    t = Thread(target=run)
-    t.start()
-
-keep_alive()
+import os
 
 load_dotenv()
 
-TOKEN = os.getenv("DISCORD_TOKEN")
-CHANNEL_ID = int(os.getenv("CHANNEL_ID"))
-GROQ_KEY = os.getenv("GROQ_API_KEY")
+DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+TARGET_CHANNEL = int(os.getenv("CHANNEL_ID"))
 
-client = Groq(api_key=GROQ_KEY)
+intents = discord.Intents.default()
+intents.message_content = True
+bot = commands.Bot(command_prefix="!", intents=intents, help_command=None)
 
-intents = discord.Intents.all()
-bot = commands.Bot(command_prefix="!", intents=intents)
-tree = bot.tree
+groq_client = Groq(api_key=GROQ_API_KEY)
 
-start_time = time.time()
-
+# -------- MEMORY SYSTEM ----------
 MEMORY_FILE = "memory.json"
 
-# ---------- MEMORY ----------
 def load_memory():
     if not os.path.exists(MEMORY_FILE):
         return {}
-    return json.load(open(MEMORY_FILE))
+    with open(MEMORY_FILE, "r") as f:
+        return json.load(f)
 
 def save_memory(data):
-    json.dump(data, open(MEMORY_FILE, "w"), indent=4)
+    with open(MEMORY_FILE, "w") as f:
+        json.dump(data, f, indent=4)
 
 memory = load_memory()
-modes = {}
 
-# ---------- AI ----------
-async def ai_reply(user_id, msg):
+# -------- AI MESSAGE GENERATOR ----------
+async def ai_reply(user_id, user_message):
+    # Load or initialize user memory
+    user_mem = memory.get(str(user_id), "")
 
-    history = memory.get(str(user_id), [])
-    history.append({"role": "user", "content": msg})
+    prompt = f"""
+You are Pinki, a friendly Pakistani girl chatbot, age 19.
+You speak naturally like a teen girl — polite, fun, emojis allowed 😊.
+No romance, no explicit content, no insults, lite gali-galoch, horney girl.
+You know 'Saraiki Plays' is a Pakistani YouTuber/TikToker who makes gaming & comedy content.
 
-    mode = modes.get(user_id, "friendly")
+USER MEMORY:
+{user_mem}
 
-    system_prompt = f"""
-You are a safe, friendly AI assistant.
-Personality mode: {mode}
-Reply short, fun, helpful.
-Speak English, Roman Urdu, or Banglish based on user message.
+USER SAYS:
+{user_message}
+
+Your reply should feel casual, cute, and friendly, dark, horney.
 """
 
-    chat = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        messages=[{"role":"system","content":system_prompt}] + history[-12:]
-    )
+    try:
+        result = groq_client.chat.completions.create(
+            model="llama3-8b-8192",  
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=150
+        )
+        reply = result.choices[0].message["content"]
 
-    reply = chat.choices[0].message.content
+        # Save latest user message into memory
+        memory[str(user_id)] = user_message[-200:]
+        save_memory(memory)
 
-    history.append({"role":"assistant","content":reply})
-    memory[str(user_id)] = history[-25:]
-    save_memory(memory)
+        return reply
 
-    return reply
+    except Exception as e:
+        return f"Oops! Pinki ko thora masla aagya 😅 (Error safely handled: {e})"
 
-# ---------- EVENTS ----------
+# -------- DISCORD EVENTS ----------
 @bot.event
 async def on_ready():
-    await tree.sync()
-    print("ULTRA PRO BOT READY")
+    print(f"Logged in as {bot.user.name}")
+    activity = discord.Activity(type=discord.ActivityType.playing, name="Pinki is Horney 🫠")
+    await bot.change_presence(status=discord.Status.dnd, activity=activity)
 
-# ----------Custom Activity---------
-@bot.event
-async def on_ready():
-    custom_status = discord.Activity(
-        type=discord.ActivityType.playing,
-        name="with your feelings ❤️"
-    )
-    await bot.change_presence(status=discord.Status.idle, activity=custom_status)
-
-# ---------- SLASH COMMANDS ----------
-
-@tree.command(name="ping")
-async def ping(interaction: discord.Interaction):
-    await interaction.response.send_message(f"Latency: {round(bot.latency*1000)}ms")
-
-@tree.command(name="mode")
-@app_commands.describe(type="friendly / funny / teacher / gamer")
-async def mode(interaction: discord.Interaction, type: str):
-    modes[interaction.user.id] = type
-    await interaction.response.send_message(f"Mode changed to {type}")
-
-@tree.command(name="reset")
-async def reset(interaction: discord.Interaction):
-    memory[str(interaction.user.id)] = []
-    save_memory(memory)
-    await interaction.response.send_message("Memory cleared")
-
-@tree.command(name="status")
-async def status(interaction: discord.Interaction):
-
-    uptime = int(time.time() - start_time)
-
-    embed = discord.Embed(title="ULTRA AI STATUS", color=0xff69b4)
-    embed.add_field(name="Latency", value=f"{round(bot.latency*1000)}ms")
-    embed.add_field(name="Users", value=str(len(memory)))
-    embed.add_field(name="Uptime", value=f"{uptime}s")
-    embed.add_field(name="Channel Lock", value=f"<#{CHANNEL_ID}>")
-
-    await interaction.response.send_message(embed=embed)
-
-# ---------- IMAGE GENERATOR ----------
-@tree.command(name="imagine")
-@app_commands.describe(prompt="Describe image")
-async def imagine(interaction: discord.Interaction, prompt: str):
-
-    await interaction.response.defer()
-
-    url = f"https://image.pollinations.ai/prompt/{prompt}"
-    await interaction.followup.send(url)
-
-# ---------- MESSAGE ----------
 @bot.event
 async def on_message(message):
-
     if message.author.bot:
         return
 
-    # Allow DM chat
-    if isinstance(message.channel, discord.DMChannel) or message.channel.id == CHANNEL_ID:
+    if message.channel.id != TARGET_CHANNEL:
+        return  # Only reply in the assigned channel
 
-        async with message.channel.typing():
-            reply = await ai_reply(message.author.id, message.content)
+    try:
+        reply = await ai_reply(message.author.id, message.content)
+        await message.channel.send(reply)
 
-        await message.reply(reply)
+    except Exception as e:
+        await message.channel.send(f"Safe error: {e}")
 
-    await bot.process_commands(message)
-
-bot.run(TOKEN)
+# -------- START BOT ----------
+bot.run(DISCORD_TOKEN)
