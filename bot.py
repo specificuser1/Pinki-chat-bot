@@ -18,7 +18,7 @@ bot = commands.Bot(command_prefix="!", intents=intents, help_command=None)
 
 groq_client = Groq(api_key=GROQ_API_KEY)
 
-# -------- MEMORY SYSTEM ----------
+# ---------- MEMORY SYSTEM ----------
 MEMORY_FILE = "memory.json"
 
 def load_memory():
@@ -33,48 +33,47 @@ def save_memory(data):
 
 memory = load_memory()
 
-# -------- AI MESSAGE GENERATOR ----------
+# ---------- AI REPLY SYSTEM ----------
 async def ai_reply(user_id, user_message):
-    # Load or initialize user memory
     user_mem = memory.get(str(user_id), "")
 
     prompt = f"""
-You are Pinki, a friendly Pakistani girl chatbot, age 19.
-You speak naturally like a teen girl — polite, fun, emojis allowed 😊.
-No romance, no explicit content, no insults, lite gali-galoch, horney girl.
-You know 'Saraiki Plays' is a Pakistani YouTuber/TikToker who makes gaming & comedy content.
+You are Pinki — a friendly Pakistani girl bot, age 19.
+You speak naturally, casual, cute, fun, and polite. Emojis allowed 😊.
+You avoid romance and explicit content.
+You know that 'Saraiki Plays' is a Pakistani YouTuber/TikToker who makes gaming and comedy content.
+Be friendly, fun, and safe.
 
 USER MEMORY:
 {user_mem}
 
-USER SAYS:
+USER MESSAGE:
 {user_message}
-
-Your reply should feel casual, cute, and friendly, dark, horney.
 """
 
     try:
         result = groq_client.chat.completions.create(
-    model="llama-3.1-8b-instant",
-    messages=[{"role": "user", "content": prompt}],
-    max_tokens=150
-)
-        reply = result.choices[0].message["content"]
+            model="llama-3.1-8b-instant",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=200
+        )
 
-        # Save latest user message into memory
+        # NEW Groq response format
+        reply = result.choices[0].message.content
+
         memory[str(user_id)] = user_message[-200:]
         save_memory(memory)
 
         return reply
 
     except Exception as e:
-        return f"Oops! Pinki ko thora masla aagya 😅 (Error safely handled: {e})"
+        return f"Pinki ko masla aagya 😅 (Error safely handled: {e})"
 
-# -------- DISCORD EVENTS ----------
+# ---------- DISCORD EVENTS ----------
 @bot.event
 async def on_ready():
-    print(f"Logged in as {bot.user.name}")
-    activity = discord.Activity(type=discord.ActivityType.playing, name="Pinki is Horney 🫠")
+    print(f"Gok Gok Logged in as {bot.user.name}")
+    activity = discord.Activity(type=discord.ActivityType.playing, name="@SaraikiPlays-s")
     await bot.change_presence(status=discord.Status.dnd, activity=activity)
 
 @bot.event
@@ -83,14 +82,14 @@ async def on_message(message):
         return
 
     if message.channel.id != TARGET_CHANNEL:
-        return  # Only reply in the assigned channel
+        return  # Bot only chats in one channel
 
     try:
         reply = await ai_reply(message.author.id, message.content)
         await message.channel.send(reply)
 
     except Exception as e:
-        await message.channel.send(f"Safe error: {e}")
+        await message.channel.send(f"Safe Error: {e}")
 
-# -------- START BOT ----------
+# ---------- START BOT ----------
 bot.run(DISCORD_TOKEN)
