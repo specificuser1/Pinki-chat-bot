@@ -129,7 +129,7 @@ async def on_message(message):
     # Pinki AI Reply
     try:
         response = client_ai.chat.completions.create(
-            model="llama3-70b-8192",
+            model="llama3-8b-8192",
             messages=[
                 {
                     "role": "system",
@@ -153,9 +153,10 @@ Level {memory[user_id]['level']}
         reply = response.choices[0].message.content[:400]
         await message.reply(reply)
 
-    except:
-        await message.reply("Groq thora mood me nahi 😒💔")
-
+    except Exception as e:
+    print("Groq Error:", e)
+    await message.reply("Pinki Masterbation kr rahi ha, wait kro 69 Minutes 😸")
+    
     await bot.process_commands(message)
 
 bot.run(TOKEN)
