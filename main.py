@@ -153,9 +153,8 @@ Level {memory[user_id]['level']}
         reply = response.choices[0].message.content[:400]
         await message.reply(reply)
 
-    except Exception as e:
-    print("Groq Error:", e)
-    await message.reply("Pinki Masterbation kr rahi ha, wait kro 69 Minutes 😸")
+    except:
+    await message.reply("Pinki thora mood me nahi 😒💔")
     
     await bot.process_commands(message)
 
